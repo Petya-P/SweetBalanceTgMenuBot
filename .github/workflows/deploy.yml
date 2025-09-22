@@ -10,8 +10,8 @@ on:
   workflow_dispatch: {}
 
 env:
-  REGION: ${{ secrets.GCP_REGION }}            # e.g. europe-central2
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}     # your GCP project id
+  REGION: ${{ secrets.GCP_REGION }}                 # e.g. europe-central2
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}         # your GCP project id
   SERVICE_NAME: ${{ secrets.CLOUD_RUN_SERVICE || 'telebot' }}
   IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/telebot-repo/telebot:github-${{ github.sha }}
 
@@ -21,6 +21,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+    # Пробрасываем секрет токена в env, чтобы можно было проверить в if:
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_PAY_TOKEN: ${{ secrets.TELEGRAM_PAY_TOKEN }}
 
     steps:
       - name: Checkout
@@ -56,17 +61,18 @@ jobs:
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars "Telegram__BotToken=${{ secrets.TELEGRAM_BOT_TOKEN }},Telegram__PaymentProviderToken=${{ secrets.TELEGRAM_PAY_TOKEN }},Telegram__Currency=EUR"
+            --set-env-vars "Telegram__BotToken=${{ env.TELEGRAM_BOT_TOKEN }},Telegram__PaymentProviderToken=${{ env.TELEGRAM_PAY_TOKEN }},Telegram__Currency=EUR"
 
       - name: Output service URL
         id: url
         run: |
           URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format='value(status.url)')
           echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "Service URL: $URL"
 
       - name: Set Telegram webhook
-        if: ${{ secrets.TELEGRAM_BOT_TOKEN != '' }}
+        if: ${{ env.TELEGRAM_BOT_TOKEN != '' }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/setWebhook" \
-            -d "url=${{ steps.url.outputs.url }}/bot/${{ secrets.TELEGRAM_BOT_TOKEN }}" \
-            && curl -s "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/getWebhookInfo"
+          curl -s -X POST "https://api.telegram.org/bot${{ env.TELEGRAM_BOT_TOKEN }}/setWebhook" \
+            -d "url=${{ steps.url.outputs.url }}/bot/${{ env.TELEGRAM_BOT_TOKEN }}" \
+            && curl -s "https://api.telegram.org/bot${{ env.TELEGRAM_BOT_TOKEN }}/getWebhookInfo"
