@@ -10,8 +10,8 @@ on:
   workflow_dispatch: {}
 
 env:
-  REGION: ${{ secrets.GCP_REGION }}
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}                 # e.g. europe-central2
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}         # sweetbalancetgbotmenu
   SERVICE_NAME: ${{ secrets.CLOUD_RUN_SERVICE || 'telebot' }}
   IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/telebot-repo/telebot:github-${{ github.sha }}
 
@@ -29,24 +29,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 1) Авторизация в GCP по JSON ключу из секрета
+      # Auth to GCP with SA JSON (no Cloud Build needed)
       - name: Auth to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # 2) Установка gcloud (будет уже авторизован)
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
           export_default_credentials: true
 
-      # 3) Явно укажем проект (иногда полезно)
-      - name: Set gcloud project
-        run: gcloud config set project "${{ env.PROJECT_ID }}"
+      # One-time APIs (можешь удалить после включения вручную)
+      - name: Enable required APIs (one-time)
+        run: |
+          gcloud services enable run.googleapis.com artifactregistry.googleapis.com || true
 
-      - name: Create AR repo if missing
+      # Создадим репозиторий в Artifact Registry, если ещё нет
+      - name: Ensure Artifact Registry repo
         run: |
           gcloud artifacts repositories describe telebot-repo --location=${{ env.REGION }} || \
           gcloud artifacts repositories create telebot-repo \
@@ -54,9 +55,18 @@ jobs:
             --location=${{ env.REGION }} \
             --description="Telegram bot repo"
 
-      - name: Build & push image with Cloud Build
-        run: gcloud builds submit --tag ${{ env.IMAGE }} .
+      # Docker auth to Artifact Registry
+      - name: Configure docker auth for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+      # Build & push image locally in the runner (no Cloud Build)
+      - name: Docker build
+        run: docker build -t ${{ env.IMAGE }} .
+
+      - name: Docker push
+        run: docker push ${{ env.IMAGE }}
+
+      # Deploy to Cloud Run
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
