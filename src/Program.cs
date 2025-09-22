@@ -1,4 +1,4 @@
-using System.Text.Json;
+using Newtonsoft.Json;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -12,10 +12,7 @@ var botToken = Environment.GetEnvironmentVariable("Telegram__BotToken");
 var payToken = Environment.GetEnvironmentVariable("Telegram__PaymentProviderToken");
 var currency = Environment.GetEnvironmentVariable("Telegram__Currency") ?? "EUR";
 
-if (string.IsNullOrWhiteSpace(botToken))
-{
-    throw new InvalidOperationException("Telegram__BotToken is not set.");
-}
+if (string.IsNullOrWhiteSpace(botToken)) throw new InvalidOperationException("Telegram__BotToken is not set.");
 
 var bot = new TelegramBotClient(botToken);
 var app = builder.Build();
@@ -35,24 +32,18 @@ app.MapPost($"/bot/{botToken}", async (HttpRequest req) =>
         using var sr = new StreamReader(req.Body);
         var json = await sr.ReadToEndAsync();
 
-        var update = System.Text.Json.JsonSerializer.Deserialize<Telegram.Bot.Types.Update>(
-            json,
-            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
+        var update = JsonConvert.DeserializeObject<Update>(json);
         if (update != null)
-        {
             await HandleUpdateAsync(bot, update);
-        }
         else
-        {
             Console.WriteLine("Webhook: null update");
-        }
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Webhook error: {ex}");
-        // НИЧЕГО не кидаем наружу
     }
+
+    return Results.Ok(); // всегда 200, чтобы Telegram не ретраил
 
     // ВАЖНО: всегда 200, иначе Telegram будет ретраить и копить pending_update_count
     return Results.Ok();
@@ -75,14 +66,10 @@ static async Task HandleUpdateAsync(ITelegramBotClient bot, Update update)
             // Перед оплатой — подтверждаем, что всё ок
             await bot.AnswerPreCheckoutQueryAsync(update.PreCheckoutQuery!.Id);
             break;
-
-        default:
-            // no-op
-            break;
     }
 }
 
-static async Task OnText(ITelegramBotClient bot, Telegram.Bot.Types.Message msg)
+static async Task OnText(ITelegramBotClient bot, Message msg)
 {
     var chatId = msg.Chat.Id;
     var text = msg.Text ?? string.Empty;
@@ -112,20 +99,29 @@ static async Task OnText(ITelegramBotClient bot, Telegram.Bot.Types.Message msg)
 }
 
 
-static string FormatPrice(int cents) => $"{cents / 100m:F2} {Environment.GetEnvironmentVariable("Telegram__Currency") ?? "EUR"}";
-
-static ReplyKeyboardMarkup MainMenu() => new(new[]
+static string FormatPrice(int cents)
 {
-    new KeyboardButton[] { "📋 Меню" },
-    new KeyboardButton[] { "💳 Оплатить" }
-}) { ResizeKeyboard = true };
+    return $"{cents / 100m:F2} {Environment.GetEnvironmentVariable("Telegram__Currency") ?? "EUR"}";
+}
 
-static MenuItem[] GetMenu()=> new[]
+static ReplyKeyboardMarkup MainMenu()
 {
-    new MenuItem("Эспрессо", 180),
-    new MenuItem("Капучино", 250),
-    new MenuItem("Чизкейк", 420),
-};
+    return new ReplyKeyboardMarkup(new[]
+    {
+        new KeyboardButton[] { "📋 Меню" },
+        new KeyboardButton[] { "💳 Оплатить" }
+    }) { ResizeKeyboard = true };
+}
+
+static MenuItem[] GetMenu()
+{
+    return new[]
+    {
+        new MenuItem("Эспрессо", 180),
+        new MenuItem("Капучино", 250),
+        new MenuItem("Чизкейк", 420)
+    };
+}
 
 static InlineKeyboardMarkup MenuKeyboard()
 {
@@ -149,18 +145,18 @@ static async Task SendSampleInvoice(ITelegramBotClient bot, long chatId)
 
     var prices = new List<LabeledPrice>
     {
-        new(label: "Эспрессо ×1", amount: 180),
-        new(label: "Капучино ×1", amount: 250)
+        new("Эспрессо ×1", 180),
+        new("Капучино ×1", 250)
     };
 
     await bot.SendInvoiceAsync(
-        chatId: chatId,
-        title: "Оплата заказа",
-        description: "Демо-инвойс (Stripe test)",
-        payload: $"order-{chatId}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}",
-        providerToken: payToken,
-        currency: currency,
-        prices: prices,
+        chatId,
+        "Оплата заказа",
+        "Демо-инвойс (Stripe test)",
+        $"order-{chatId}-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}",
+        payToken,
+        currency,
+        prices,
         needName: true,
         needPhoneNumber: false,
         needEmail: false,
@@ -170,4 +166,4 @@ static async Task SendSampleInvoice(ITelegramBotClient bot, long chatId)
 }
 
 // ============ Demo menu + invoice ============
-record MenuItem(string Name, int PriceCents);
+internal record MenuItem(string Name, int PriceCents);

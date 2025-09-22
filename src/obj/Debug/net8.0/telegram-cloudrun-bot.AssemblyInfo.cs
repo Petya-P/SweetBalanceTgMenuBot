@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("telegram-cloudrun-bot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0be267317344bb02af811270114e75c73f4b9702")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+db35cba12f5fc6c48c8f7063122d521ac3968c50")]
 [assembly: System.Reflection.AssemblyProductAttribute("telegram-cloudrun-bot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("telegram-cloudrun-bot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
