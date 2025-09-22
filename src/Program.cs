@@ -44,9 +44,6 @@ app.MapPost($"/bot/{botToken}", async (HttpRequest req) =>
     }
 
     return Results.Ok(); // всегда 200, чтобы Telegram не ретраил
-
-    // ВАЖНО: всегда 200, иначе Telegram будет ретраить и копить pending_update_count
-    return Results.Ok();
 });
 
 
