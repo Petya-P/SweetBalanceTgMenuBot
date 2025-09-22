@@ -24,27 +24,40 @@ var app = builder.Build();
 app.MapGet("/health", () => Results.Ok("ok"));
 
 // Webhook endpoint: Telegram будет слать сюда Update
-app.MapPost($"/bot/{botToken}", async (HttpContext ctx) =>
+// Healthcheck
+app.MapGet("/health", () => Results.Ok("ok"));
+
+// Надёжный вебхук: всегда 200, логируем ошибки
+app.MapPost($"/bot/{botToken}", async (HttpRequest req) =>
 {
-    Update? update;
     try
     {
-        update = await JsonSerializer.DeserializeAsync<Update>(ctx.Request.Body, new JsonSerializerOptions
+        using var sr = new StreamReader(req.Body);
+        var json = await sr.ReadToEndAsync();
+
+        var update = System.Text.Json.JsonSerializer.Deserialize<Telegram.Bot.Types.Update>(
+            json,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        if (update != null)
         {
-            PropertyNameCaseInsensitive = true
-        });
+            await HandleUpdateAsync(bot, update);
+        }
+        else
+        {
+            Console.WriteLine("Webhook: null update");
+        }
     }
-    catch
+    catch (Exception ex)
     {
-        return Results.BadRequest("invalid json");
+        Console.WriteLine($"Webhook error: {ex}");
+        // НИЧЕГО не кидаем наружу
     }
 
-    if (update is null)
-        return Results.BadRequest("null update");
-
-    await HandleUpdateAsync(bot, update);
+    // ВАЖНО: всегда 200, иначе Telegram будет ретраить и копить pending_update_count
     return Results.Ok();
 });
+
 
 app.Run();
 
