@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "l/VYEnyG0TA=",
+  "success": true,
+  "projectFilePath": "/Users/petaptasinskij/RiderProjects/SweetBalanceTgMenuBot/src/telegram-cloudrun-bot.csproj",
+  "expectedPackageFiles": [
+    "/Users/petaptasinskij/.nuget/packages/newtonsoft.json/13.0.1/newtonsoft.json.13.0.1.nupkg.sha512",
+    "/Users/petaptasinskij/.nuget/packages/telegram.bot/19.0.0/telegram.bot.19.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}

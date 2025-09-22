@@ -1,0 +1,72 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - "src/**"
+      - "Dockerfile"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: {}
+
+env:
+  REGION: ${{ secrets.GCP_REGION }}            # e.g. europe-central2
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}     # your GCP project id
+  SERVICE_NAME: ${{ secrets.CLOUD_RUN_SERVICE || 'telebot' }}
+  IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/telebot-repo/telebot:github-${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+
+      - name: Enable required APIs (one-time per project)
+        run: |
+          gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com
+
+      - name: Create AR repo if missing
+        run: |
+          gcloud artifacts repositories describe telebot-repo --location=${{ env.REGION }} || \
+          gcloud artifacts repositories create telebot-repo \
+            --repository-format=docker \
+            --location=${{ env.REGION }} \
+            --description="Telegram bot repo"
+
+      - name: Build & push image with Cloud Build
+        run: |
+          gcloud builds submit --tag ${{ env.IMAGE }} .
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image ${{ env.IMAGE }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "Telegram__BotToken=${{ secrets.TELEGRAM_BOT_TOKEN }},Telegram__PaymentProviderToken=${{ secrets.TELEGRAM_PAY_TOKEN }},Telegram__Currency=EUR"
+
+      - name: Output service URL
+        id: url
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --format='value(status.url)')
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Set Telegram webhook
+        if: ${{ secrets.TELEGRAM_BOT_TOKEN != '' }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/setWebhook" \
+            -d "url=${{ steps.url.outputs.url }}/bot/${{ secrets.TELEGRAM_BOT_TOKEN }}" \
+            && curl -s "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/getWebhookInfo"
