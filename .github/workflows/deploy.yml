@@ -46,10 +46,6 @@ jobs:
       - name: Set gcloud project
         run: gcloud config set project "${{ env.PROJECT_ID }}"
 
-      - name: Enable required APIs
-        run: |
-          gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com
-
       - name: Create AR repo if missing
         run: |
           gcloud artifacts repositories describe telebot-repo --location=${{ env.REGION }} || \
